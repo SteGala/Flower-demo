@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flower-client
+  labels:
+    app: flower-client
+spec:
+  replicas: 3  # Number of client replicas
+  selector:
+    matchLabels:
+      app: flower-client
+  template:
+    metadata:
+      labels:
+        app: flower-client
+    spec:
+      containers:
+      - name: flower-client
+        image: stegala/flower-client:v0.1  # Replace with your actual image
+        env:
+        - name: SERVER_IP
+          value: "flower-server-service"  # Service name of Flower server
+        - name: SERVER_PORT
+          value: "8000"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PARTITION_ID
+          value: ""  # Placeholder, will be set by the script below
+        command: ["sh", "-c", "export PARTITION_ID=$(echo ${POD_NAME##*-}); python main.py"]
+        # The shell command extracts the number after the last dash (-) in POD_NAME and uses it as PARTITION_ID

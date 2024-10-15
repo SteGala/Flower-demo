@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flower-server
+  labels:
+    app: flower-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flower-server
+  template:
+    metadata:
+      labels:
+        app: flower-server
+    spec:
+      containers:
+      - name: flower-server
+        image: stegala/flower-server:v0.1  # Replace with your actual image
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SERVER_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP  # Dynamically uses the Pod IP for the server
+        - name: SERVER_PORT
+          value: "8000"
+        - name: NUM_ROUNDS
+          value: "5"
+        command: ["python", "main.py"]  # Make sure this is the correct command to run your Flower server script

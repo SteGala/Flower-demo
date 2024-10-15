@@ -1,0 +1,8 @@
+FROM python:3.12.3
+
+COPY pytorch-from-centralized-to-federated/client.py client.py
+COPY pytorch-from-centralized-to-federated/requirements.txt requirements.txt
+
+RUN pip3 install -r requirements.txt
+
+ENTRYPOINT ["python", "client.py"]
