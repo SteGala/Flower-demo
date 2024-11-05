@@ -1,8 +1,12 @@
 FROM python:3.12.3
 
-COPY pytorch-from-centralized-to-federated/client.py client.py
-COPY pytorch-from-centralized-to-federated/requirements.txt requirements.txt
-
+# Copy only the requirements file and install dependencies
+COPY pytorch-from-centralized-to-federated/requirements_client.txt requirements.txt
 RUN pip3 install -r requirements.txt
 
-ENTRYPOINT ["python", "client.py"]
+# Copy the rest of the application files
+COPY pytorch-from-centralized-to-federated/client.py main.py
+COPY pytorch-from-centralized-to-federated/cifar.py cifar.py
+
+# Set the entry point (optional, depending on how you run the container)
+ENTRYPOINT ["python", "main.py"]

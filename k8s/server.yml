@@ -17,13 +17,12 @@ spec:
       containers:
       - name: flower-server
         image: stegala/flower-server:v0.1  # Replace with your actual image
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:
         - name: SERVER_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIP  # Dynamically uses the Pod IP for the server
+          value: "0.0.0.0"
         - name: SERVER_PORT
           value: "8000"
         - name: NUM_ROUNDS

@@ -18,7 +18,7 @@ def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
 
 def read_env_variable():
     # get node ID
-    server_ip = os.getenv('SERVER_IP', "127.0.0.1")
+    server_ip = os.getenv('SERVER_IP', "0.0.0.0")
     server_port = os.getenv('SERVER_PORT', "8000")
     num_rounds = int(os.getenv('NUM_ROUNDS', 5))
 

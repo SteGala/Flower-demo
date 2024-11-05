@@ -98,7 +98,7 @@ def main() -> None:
 
 def read_env_variable():
     # get node ID
-    server_ip = os.getenv('SERVER_IP', "127.0.0.1")
+    server_ip = os.getenv('SERVER_IP', "0.0.0.0")
     server_port = os.getenv('SERVER_PORT', "8000")
     partition_id = int(os.getenv('PARTITION_ID', 0))
 

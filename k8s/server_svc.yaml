@@ -11,4 +11,4 @@ spec:
     - protocol: TCP
       port: 8000       # Internal service port
       targetPort: 8000 # Container port
-  type: ClusterIP      # Internal-only access within the cluster
+  type: NodePort      # Internal-only access within the cluster

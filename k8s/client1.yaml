@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flower-client
+  name: flower-client1
   labels:
-    app: flower-client
+    app: flower-client1
 spec:
   replicas: 1  # Number of client replicas
   selector:
     matchLabels:
-      app: flower-client
+      app: flower-client1
   template:
     metadata:
       labels:
-        app: flower-client
+        app: flower-client1
     spec:
       containers:
-      - name: flower-client
+      - name: flower-client1
         image: stegala/flower-client:v0.1  # Replace with your actual image
         imagePullPolicy: Always
         env:
@@ -28,7 +28,7 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: PARTITION_ID
-          value: "0"  # Placeholder, will be set by the script below
+          value: "1"  # Placeholder, will be set by the script below
         command: ["python", "-u", "main.py"]
         # The shell command extracts the number after the last dash (-) in POD_NAME and uses it as PARTITION_ID
         resources:
