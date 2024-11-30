@@ -1,18 +1,51 @@
 from typing import List, Tuple
 import os
 import time
+import string
+import random
+
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 import flwr as fl
 from flwr.common import Metrics
-import requests
+#import requests
+
+def get_random_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = ''.join(random.choice(letters) for i in range(length))
+    #print("Random string of length", length, "is:", result_str)
+    return result_str
 
 def send_duration(ep, duration):
-    data = {"duration": duration}
-    response = requests.post(f'http://{ep}/post_duration', json=data)
-    if response.status_code == 200:
-        print('Duration sent successfully')
-    else:
-        print('Error sending duration')
+    # Create a registry for the metrics
+    registry = CollectorRegistry()
+    
+    fid = get_random_string(8)
+
+    # Define a metric
+    g = Gauge('training_time', 'Training time of the Flower server', registry=registry)
+
+    # Set the value of the metric
+    g.set(int(duration))
+
+    # Push the metric with labels
+    try:
+        push_to_gateway(
+            'pushgateway.monitoring.svc.cluster.local:9091',
+            job='example_job',
+            grouping_key={'instance': f"flower-server-{fid}"},
+            registry=registry
+        )
+    except Exception as e:
+        print("PushGateway not available.")
+    
+    # data = {"duration": duration}
+    # response = requests.post(f'http://{ep}/post_duration', json=data)
+    # if response.status_code == 200:
+    #     print('Duration sent successfully')
+    # else:
+    #     print('Error sending duration')
 
 # Define metric aggregation function
 def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
