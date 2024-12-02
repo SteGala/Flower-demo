@@ -1,150 +1,165 @@
-"""PyTorch CIFAR-10 image classification.
-
-The code is generally adapted from 'PyTorch: A 60 Minute Blitz'. Further
-explanations are given in the official PyTorch tutorial:
-
-https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
 """
+Simplified PyTorch CIFAR-10 Image Classification with an Even Simpler CNN.
 
-# mypy: ignore-errors
-# pylint: disable=W0223
+This code is adapted to load the CIFAR-10 dataset from a local directory
+and uses an even more simplified convolutional neural network suitable for CPU training.
 
+Author: [Your Name]
+Date: 2024-12-02
+"""
 
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from flwr_datasets import FederatedDataset
 from torch import Tensor
 from torch.utils.data import DataLoader
+from torchvision import datasets
 from torchvision.transforms import Compose, Normalize, ToTensor
 
 
-# pylint: disable=unsubscriptable-object
-class Net(nn.Module):
-    """Simple CNN adapted from 'PyTorch: A 60 Minute Blitz'."""
+class SimpleNet(nn.Module):
+    """Even More Simplified CNN for CIFAR-10 classification."""
 
     def __init__(self) -> None:
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.bn1 = nn.BatchNorm2d(6)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.bn2 = nn.BatchNorm2d(16)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.bn3 = nn.BatchNorm1d(120)
-        self.fc2 = nn.Linear(120, 84)
-        self.bn4 = nn.BatchNorm1d(84)
-        self.fc3 = nn.Linear(84, 10)
+        super(SimpleNet, self).__init__()
+        # Single convolutional layer with fewer filters
+        self.conv1 = nn.Conv2d(3, 4, 3, padding=1)  # Output: 4 x 32 x 32
+        self.pool = nn.MaxPool2d(2, 2)               # Output: 4 x 16 x 16
+        # Global Average Pooling instead of fully connected layers
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Output: 4 x 1 x 1
+        self.fc = nn.Linear(4, 10)                        # Output layer
 
-    # pylint: disable=arguments-differ,invalid-name
     def forward(self, x: Tensor) -> Tensor:
         """Compute forward pass."""
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
-        x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.bn3(self.fc1(x)))
-        x = F.relu(self.bn4(self.fc2(x)))
-        x = self.fc3(x)
+        x = F.relu(self.conv1(x))  # Apply convolution and activation
+        x = self.pool(x)           # Apply pooling
+        x = self.global_avg_pool(x)  # Apply global average pooling
+        x = x.view(-1, 4)           # Flatten
+        x = self.fc(x)              # Output layer
         return x
 
 
-def load_data(partition_id: int):
-    """Load partition CIFAR10 data."""
-    fds = FederatedDataset(dataset="cifar10", partitioners={"train": 10})
-    partition = fds.load_partition(partition_id)
-    # Divide data on each node: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
+def load_data(local_data_path: str = "./data") -> Tuple[DataLoader, DataLoader]:
+    """
+    Load CIFAR-10 data from a local directory.
+
+    Args:
+        local_data_path (str): Path to the parent directory where CIFAR-10 is stored.
+
+    Returns:
+        Tuple[DataLoader, DataLoader]: Training and testing DataLoaders.
+    """
+    # Define transformations
     pytorch_transforms = Compose(
         [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     )
 
-    def apply_transforms(batch):
-        """Apply transforms to the partition from FederatedDataset."""
-        batch["img"] = [pytorch_transforms(img) for img in batch["img"]]
-        return batch
+    # Load training and test datasets from local directory
+    train_dataset = datasets.CIFAR10(
+        root=local_data_path,
+        train=True,
+        download=False,  # Set to False since dataset is manually downloaded
+        transform=pytorch_transforms,
+    )
 
-    partition_train_test = partition_train_test.with_transform(apply_transforms)
-    trainloader = DataLoader(partition_train_test["train"], batch_size=32, shuffle=True)
-    testloader = DataLoader(partition_train_test["test"], batch_size=32)
+    test_dataset = datasets.CIFAR10(
+        root=local_data_path,
+        train=False,
+        download=False,
+        transform=pytorch_transforms,
+    )
+
+    # Create DataLoaders
+    trainloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=0)
+    testloader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=0)
+
     return trainloader, testloader
 
 
 def train(
-    net: Net,
-    trainloader: torch.utils.data.DataLoader,
+    net: SimpleNet,
+    trainloader: DataLoader,
     epochs: int,
-    device: torch.device,  # pylint: disable=no-member
+    device: torch.device,
 ) -> None:
-    """Train the network."""
-    # Define loss and optimizer
+    """Train the network on the training data."""
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
 
-    print(f"Training {epochs} epoch(s) w/ {len(trainloader)} batches each")
-
-    # Train the network
     net.to(device)
     net.train()
-    for epoch in range(epochs):  # loop over the dataset multiple times
+    for epoch in range(epochs):
         running_loss = 0.0
-        for i, data in enumerate(trainloader, 0):
-            images, labels = data["img"].to(device), data["label"].to(device)
+        for batch_idx, data in enumerate(trainloader, 0):
+            inputs, labels = data[0].to(device), data[1].to(device)
 
-            # zero the parameter gradients
+            # Zero the parameter gradients
             optimizer.zero_grad()
 
-            # forward + backward + optimize
-            outputs = net(images)
+            # Forward pass
+            outputs = net(inputs)
             loss = criterion(outputs, labels)
+
+            # Backward pass and optimization
             loss.backward()
             optimizer.step()
 
-            # print statistics
+            # Accumulate loss
             running_loss += loss.item()
-            if i % 100 == 99:  # print every 100 mini-batches
-                print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1, running_loss / 2000))
+
+            if batch_idx % 100 == 99:  # Print every 100 mini-batches
+                print(
+                    f"[Epoch {epoch + 1}, Batch {batch_idx + 1}] loss: {running_loss / 100:.3f}"
+                )
                 running_loss = 0.0
+
+    print("Finished Training")
 
 
 def test(
-    net: Net,
-    testloader: torch.utils.data.DataLoader,
-    device: torch.device,  # pylint: disable=no-member
+    net: SimpleNet,
+    testloader: DataLoader,
+    device: torch.device,
 ) -> Tuple[float, float]:
     """Validate the network on the entire test set."""
     # Define loss and metrics
     criterion = nn.CrossEntropyLoss()
-    correct, loss = 0, 0.0
+    correct, total_loss = 0, 0.0
 
     # Evaluate the network
     net.to(device)
     net.eval()
     with torch.no_grad():
         for data in testloader:
-            images, labels = data["img"].to(device), data["label"].to(device)
-            outputs = net(images)
-            loss += criterion(outputs, labels).item()
-            _, predicted = torch.max(outputs.data, 1)  # pylint: disable=no-member
+            inputs, labels = data[0].to(device), data[1].to(device)
+            outputs = net(inputs)
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
+
+    average_loss = total_loss / len(testloader)
     accuracy = correct / len(testloader.dataset)
-    return loss, accuracy
+    return average_loss, accuracy
 
 
 def main():
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print("Centralized PyTorch training")
-    print("Load data")
-    trainloader, testloader = load_data(0)
-    net = Net().to(DEVICE)
-    net.eval()
-    print("Start training")
-    train(net=net, trainloader=trainloader, epochs=2, device=DEVICE)
-    print("Evaluate model")
+    print(f"Using device: {DEVICE}")
+    print("Centralized PyTorch training with an even more simplified CNN")
+    print("Loading data...")
+    # Set local_data_path to the parent directory containing 'cifar-10-batches-py'
+    local_data_path = "/home/cc/Flower-demo"
+    trainloader, testloader = load_data(local_data_path=local_data_path)
+    net = SimpleNet()
+    print("Starting training...")
+    train(net=net, trainloader=trainloader, epochs=10, device=DEVICE)
+    print("Evaluating model...")
     loss, accuracy = test(net=net, testloader=testloader, device=DEVICE)
-    print("Loss: ", loss)
-    print("Accuracy: ", accuracy)
+    print(f"Test Loss: {loss:.3f}")
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
 
 if __name__ == "__main__":
