@@ -14,10 +14,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import Compose, Normalize, ToTensor
-
+from typing import Tuple
+from torch.utils.data import DataLoader, Subset
+import math
 
 class SimpleNet(nn.Module):
     """Even More Simplified CNN for CIFAR-10 classification."""
@@ -41,41 +42,60 @@ class SimpleNet(nn.Module):
         return x
 
 
-def load_data(local_data_path: str = "./data") -> Tuple[DataLoader, DataLoader]:
+
+
+def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partitions: int = 1) -> Tuple[DataLoader, DataLoader]:
     """
-    Load CIFAR-10 data from a local directory.
+    Load CIFAR-10 data from a local directory and partition it for federated learning.
 
     Args:
         local_data_path (str): Path to the parent directory where CIFAR-10 is stored.
+        partition_id (int): ID of the current partition (client).
+        num_partitions (int): Total number of partitions (clients).
 
     Returns:
-        Tuple[DataLoader, DataLoader]: Training and testing DataLoaders.
+        Tuple[DataLoader, DataLoader]: Training and testing DataLoaders for the client.
     """
     # Define transformations
     pytorch_transforms = Compose(
         [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     )
 
-    # Load training and test datasets from local directory
-    train_dataset = datasets.CIFAR10(
+    # Load the full training and test datasets
+    full_train_dataset = datasets.CIFAR10(
         root=local_data_path,
         train=True,
-        download=False,  # Set to False since dataset is manually downloaded
+        download=False,  # Set to True to ensure dataset is downloaded if not present
         transform=pytorch_transforms,
     )
 
-    test_dataset = datasets.CIFAR10(
+    full_test_dataset = datasets.CIFAR10(
         root=local_data_path,
         train=False,
         download=False,
         transform=pytorch_transforms,
     )
 
+    # Partition the training data
+    train_size = len(full_train_dataset)
+    partition_size = math.ceil(train_size / num_partitions)
+    indices = list(range(train_size))
+    start = partition_id * partition_size
+    end = start + partition_size
+    subset_indices = indices[start:end]
+    train_subset = Subset(full_train_dataset, subset_indices)
+
+    # Optionally, partition the test data similarly
+    # Here, we keep test data the same across clients
+    test_subset = full_test_dataset  # Alternatively, partition test data as well
+
     # Create DataLoaders
-    trainloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=0)
-    testloader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=0)
+    trainloader = DataLoader(train_subset, batch_size=128, shuffle=True, num_workers=0)
+    testloader = DataLoader(test_subset, batch_size=128, shuffle=False, num_workers=0)
 
     return trainloader, testloader
+
+
 
 
 def train(
@@ -151,7 +171,7 @@ def main():
     print("Centralized PyTorch training with an even more simplified CNN")
     print("Loading data...")
     # Set local_data_path to the parent directory containing 'cifar-10-batches-py'
-    local_data_path = "/home/cc/Flower-demo"
+    local_data_path = "/home/andrea/projects/Flower-demo/pytorch-from-centralized-to-federated"
     trainloader, testloader = load_data(local_data_path=local_data_path)
     net = SimpleNet()
     print("Starting training...")
@@ -160,6 +180,7 @@ def main():
     loss, accuracy = test(net=net, testloader=testloader, device=DEVICE)
     print(f"Test Loss: {loss:.3f}")
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from collections import OrderedDict
 import os
 from typing import Dict, List, Tuple
 
-import cifar
+import cifar  # Ensure this module contains SimpleNet, load_data, train, test
 import flwr as fl
 import numpy as np
 import torch
@@ -14,8 +14,7 @@ from torch.utils.data import DataLoader
 
 disable_progress_bar()
 
-
-USE_FEDBN: bool = True
+USE_FEDBN: bool = False  # Set to True if using BatchNorm layers in the model
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -26,7 +25,7 @@ class CifarClient(fl.client.NumPyClient):
 
     def __init__(
         self,
-        model: cifar.Net,
+        model: cifar.SimpleNet,
         trainloader: DataLoader,
         testloader: DataLoader,
     ) -> None:
@@ -80,29 +79,33 @@ class CifarClient(fl.client.NumPyClient):
 
 def main() -> None:
     """Load data, start CifarClient."""
-    server_ip, server_port, partition_id = read_env_variable()
+    server_ip, server_port, partition_id, num_partitions = read_env_variable()
 
-    # Load data
-    trainloader, testloader = cifar.load_data(partition_id)
+    # Load data with partitioning
+    local_data_path = "/home/andrea/projects/Flower-demo/pytorch-from-centralized-to-federated"
+    trainloader, testloader = cifar.load_data(local_data_path, partition_id, num_partitions)
 
     # Load model
-    model = cifar.Net().to(DEVICE).train()
+    model = cifar.SimpleNet().to(DEVICE).train()
 
     # Perform a single forward pass to properly initialize BatchNorm
-    _ = model(next(iter(trainloader))["img"].to(DEVICE))
+    inputs, _ = next(iter(trainloader))  # Corrected line
+    _ = model(inputs.to(DEVICE))         # Corrected line
 
     # Start client
-    client = CifarClient(model, trainloader, testloader).to_client()
+    client = CifarClient(model, trainloader, testloader).to_client()  # Correct usage of to_client()
     fl.client.start_client(server_address=f"{server_ip}:{server_port}", client=client)
 
 
 def read_env_variable():
-    # get node ID
+    # get node ID and total number of partitions (clients)
     server_ip = os.getenv('SERVER_IP', "0.0.0.0")
     server_port = os.getenv('SERVER_PORT', "8000")
     partition_id = int(os.getenv('PARTITION_ID', 0))
+    num_partitions = int(os.getenv('NUM_PARTITIONS', 2))  # Default to 2 clients
 
-    return server_ip, server_port, partition_id
+    return server_ip, server_port, partition_id, num_partitions
+
 
 if __name__ == "__main__":
     main()
