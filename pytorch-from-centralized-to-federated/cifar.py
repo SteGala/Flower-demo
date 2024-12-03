@@ -171,7 +171,7 @@ def main():
     print("Centralized PyTorch training with an even more simplified CNN")
     print("Loading data...")
     # Set local_data_path to the parent directory containing 'cifar-10-batches-py'
-    local_data_path = "/home/andrea/projects/Flower-demo/pytorch-from-centralized-to-federated"
+    local_data_path = "spytorch-from-centralized-to-federated"
     trainloader, testloader = load_data(local_data_path=local_data_path)
     net = SimpleNet()
     print("Starting training...")
