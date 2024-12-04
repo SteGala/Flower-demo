@@ -1,13 +1,10 @@
-# client.py
-
-"""Flower client example using PyTorch with ResNet18 for CIFAR-10 image classification."""
+"""Flower client example using PyTorch for CIFAR-10 image classification."""
 
 import argparse
 from collections import OrderedDict
-import os
 from typing import Dict, List, Tuple
 
-import cifar  # Updated cifar.py with ResNetClientModel
+import cifar
 import flwr as fl
 import numpy as np
 import torch
@@ -16,18 +13,19 @@ from torch.utils.data import DataLoader
 
 disable_progress_bar()
 
-USE_FEDBN: bool = False  # Set to True if using BatchNorm layers in the model
+
+USE_FEDBN: bool = True
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 # Flower Client
 class CifarClient(fl.client.NumPyClient):
-    """Flower client implementing CIFAR-10 image classification using ResNet18."""
+    """Flower client implementing CIFAR-10 image classification using PyTorch."""
 
     def __init__(
         self,
-        model: cifar.ResNetClientModel,
+        model: cifar.Net,
         trainloader: DataLoader,
         testloader: DataLoader,
     ) -> None:
@@ -41,13 +39,13 @@ class CifarClient(fl.client.NumPyClient):
             # Return model parameters as a list of NumPy ndarrays, excluding
             # parameters of BN layers when using FedBN
             return [
-                val.cpu().numpy().astype(np.float32)
+                val.cpu().numpy()
                 for name, val in self.model.state_dict().items()
                 if "bn" not in name
             ]
         else:
             # Return model parameters as a list of NumPy ndarrays
-            return [val.cpu().numpy().astype(np.float32) for _, val in self.model.state_dict().items()]
+            return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
 
     def set_parameters(self, parameters: List[np.ndarray]) -> None:
         # Set model parameters from a list of NumPy ndarrays
@@ -67,7 +65,7 @@ class CifarClient(fl.client.NumPyClient):
     ) -> Tuple[List[np.ndarray], int, Dict]:
         # Set model parameters, train model, return updated model parameters
         self.set_parameters(parameters)
-        cifar.train(self.model, self.trainloader, epochs=1, device=DEVICE)  # Minimal training
+        cifar.train(self.model, self.trainloader, epochs=1, device=DEVICE)
         return self.get_parameters(config={}), len(self.trainloader.dataset), {}
 
     def evaluate(
@@ -80,43 +78,23 @@ class CifarClient(fl.client.NumPyClient):
 
 
 def main() -> None:
-    """Load data, initialize ResNet18 model, and start CifarClient."""
-    server_ip, server_port, partition_id, num_partitions = read_env_variable()
+    """Load data, start CifarClient."""
+    parser = argparse.ArgumentParser(description="Flower")
+    parser.add_argument("--partition-id", type=int, required=True, choices=range(0, 10))
+    args = parser.parse_args()
 
-    # Load data with partitioning
-    local_data_path = "./data"
-    trainloader, testloader = cifar.load_data(local_data_path, partition_id, num_partitions)
+    # Load data
+    trainloader, testloader = cifar.load_data(args.partition_id)
 
-    # Load ResNet18 model
-    model = cifar.ResNetClientModel().to(DEVICE).train()
+    # Load model
+    model = cifar.Net().to(DEVICE).train()
 
-    # Perform a single forward pass to properly initialize BatchNorm (if used)
-    try:
-        inputs, _ = next(iter(trainloader))
-        _ = model(inputs.to(DEVICE))
-    except StopIteration:
-        print("Train loader is empty. Please check data partitioning.")
-        return
+    # Perform a single forward pass to properly initialize BatchNorm
+    _ = model(next(iter(trainloader))["img"].to(DEVICE))
 
     # Start client
-    client = CifarClient(model, trainloader, testloader)
-    fl.client.start_client(server_address=f"{server_ip}:{server_port}", client=client)
-
-
-def read_env_variable():
-    """
-    Read environment variables for server configuration and client partitioning.
-
-    Returns:
-        Tuple[str, str, int, int]: server_ip, server_port, partition_id, num_partitions
-    """
-    # Get node ID and total number of partitions (clients)
-    server_ip = os.getenv('SERVER_IP', "0.0.0.0")
-    server_port = os.getenv('SERVER_PORT', "8000")
-    partition_id = int(os.getenv('PARTITION_ID', 0))
-    num_partitions = int(os.getenv('NUM_PARTITIONS', 2))  # Default to 2 clients
-
-    return server_ip, server_port, partition_id, num_partitions
+    client = CifarClient(model, trainloader, testloader).to_client()
+    fl.client.start_client(server_address="127.0.0.1:8080", client=client)
 
 
 if __name__ == "__main__":

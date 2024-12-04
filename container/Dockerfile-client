@@ -1,15 +1,15 @@
 FROM python:3.12.3
 
 # Copy only the requirements file and install dependencies
-COPY pytorch-from-centralized-to-federated/requirements_client.txt requirements.txt
+COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 
-RUN wget https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
-RUN tar -xvzf cifar-10-python.tar.gz
 
-# Copy the rest of the application files
-COPY pytorch-from-centralized-to-federated/client.py main.py
-COPY pytorch-from-centralized-to-federated/cifar.py cifar.py
+# Copy the application files
+COPY fl/cifar-10-batches-py cifar-10-batches-py
+COPY fl/client.py client.py
+COPY fl/server.py server.py
+COPY fl/cifar.py cifar.py
 
-# Set the entry point (optional, depending on how you run the container)
-ENTRYPOINT ["python", "main.py"]
+# Set a default command that can be overridden at runtime
+CMD ["python", "server.py"]

@@ -1,11 +1,13 @@
-"""
-Simplified PyTorch CIFAR-10 Image Classification with an Even Simpler CNN.
+# cifar.py
 
-This code is adapted to load the CIFAR-10 dataset from a local directory
-and uses an even more simplified convolutional neural network suitable for CPU training.
+"""
+Enhanced PyTorch CIFAR-10 Image Classification with ResNet18.
+
+This code loads the CIFAR-10 dataset and defines a ResNet18 model tailored for it,
+suitable for federated learning using Flower.
 
 Author: [Your Name]
-Date: 2024-12-02
+Date: 2024-12-03
 """
 
 from typing import Tuple
@@ -14,37 +16,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torchvision import datasets
+from torchvision import datasets, models
 from torchvision.transforms import Compose, Normalize, ToTensor
-from typing import Tuple
 from torch.utils.data import DataLoader, Subset
 import math
 
-class SimpleNet(nn.Module):
-    """Even More Simplified CNN for CIFAR-10 classification."""
+
+class ResNetClientModel(nn.Module):
+    """ResNet18 model customized for CIFAR-10 classification."""
 
     def __init__(self) -> None:
-        super(SimpleNet, self).__init__()
-        # Single convolutional layer with fewer filters
-        self.conv1 = nn.Conv2d(3, 4, 3, padding=1)  # Output: 4 x 32 x 32
-        self.pool = nn.MaxPool2d(2, 2)               # Output: 4 x 16 x 16
-        # Global Average Pooling instead of fully connected layers
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Output: 4 x 1 x 1
-        self.fc = nn.Linear(4, 10)                        # Output layer
+        super(ResNetClientModel, self).__init__()
+        # Load a larger ResNet model
+        self.model = models.resnet50(pretrained=False, num_classes=10)
+        # Modify the first convolution layer
+        self.model.conv1 = nn.Conv2d(
+            3, 64, kernel_size=3, stride=1, padding=1, bias=False
+        )
+        # Remove the max pooling layer
+        self.model.maxpool = nn.Identity()
 
     def forward(self, x: Tensor) -> Tensor:
-        """Compute forward pass."""
-        x = F.relu(self.conv1(x))  # Apply convolution and activation
-        x = self.pool(x)           # Apply pooling
-        x = self.global_avg_pool(x)  # Apply global average pooling
-        x = x.view(-1, 4)           # Flatten
-        x = self.fc(x)              # Output layer
-        return x
+        """Forward pass through ResNet18."""
+        return self.model(x)
 
 
-
-
-def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partitions: int = 1) -> Tuple[DataLoader, DataLoader]:
+def load_data(
+    local_data_path: str = ".", partition_id: int = 0, num_partitions: int = 1
+) -> Tuple[DataLoader, DataLoader]:
     """
     Load CIFAR-10 data from a local directory and partition it for federated learning.
 
@@ -56,6 +55,7 @@ def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partit
     Returns:
         Tuple[DataLoader, DataLoader]: Training and testing DataLoaders for the client.
     """
+    local_data_path = "."
     # Define transformations
     pytorch_transforms = Compose(
         [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
@@ -65,7 +65,7 @@ def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partit
     full_train_dataset = datasets.CIFAR10(
         root=local_data_path,
         train=True,
-        download=False,  # Set to True to ensure dataset is downloaded if not present
+        download=False,  # Ensure dataset is downloaded
         transform=pytorch_transforms,
     )
 
@@ -81,7 +81,7 @@ def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partit
     partition_size = math.ceil(train_size / num_partitions)
     indices = list(range(train_size))
     start = partition_id * partition_size
-    end = start + partition_size
+    end = min(start + partition_size, train_size)
     subset_indices = indices[start:end]
     train_subset = Subset(full_train_dataset, subset_indices)
 
@@ -90,16 +90,18 @@ def load_data(local_data_path: str = "./data", partition_id: int = 0, num_partit
     test_subset = full_test_dataset  # Alternatively, partition test data as well
 
     # Create DataLoaders
-    trainloader = DataLoader(train_subset, batch_size=128, shuffle=True, num_workers=0)
-    testloader = DataLoader(test_subset, batch_size=128, shuffle=False, num_workers=0)
+    trainloader = DataLoader(
+        train_subset, batch_size=128, shuffle=True, num_workers=2
+    )
+    testloader = DataLoader(
+        test_subset, batch_size=128, shuffle=False, num_workers=2
+    )
 
     return trainloader, testloader
 
 
-
-
 def train(
-    net: SimpleNet,
+    net: nn.Module,
     trainloader: DataLoader,
     epochs: int,
     device: torch.device,
@@ -139,7 +141,7 @@ def train(
 
 
 def test(
-    net: SimpleNet,
+    net: nn.Module,
     testloader: DataLoader,
     device: torch.device,
 ) -> Tuple[float, float]:
@@ -163,25 +165,4 @@ def test(
     average_loss = total_loss / len(testloader)
     accuracy = correct / len(testloader.dataset)
     return average_loss, accuracy
-
-
-def main():
-    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {DEVICE}")
-    print("Centralized PyTorch training with an even more simplified CNN")
-    print("Loading data...")
-    # Set local_data_path to the parent directory containing 'cifar-10-batches-py'
-    local_data_path = "spytorch-from-centralized-to-federated"
-    trainloader, testloader = load_data(local_data_path=local_data_path)
-    net = SimpleNet()
-    print("Starting training...")
-    train(net=net, trainloader=trainloader, epochs=10, device=DEVICE)
-    print("Evaluating model...")
-    loss, accuracy = test(net=net, testloader=testloader, device=DEVICE)
-    print(f"Test Loss: {loss:.3f}")
-    print(f"Test Accuracy: {accuracy * 100:.2f}%")
-
-
-
-if __name__ == "__main__":
-    main()
+ 
